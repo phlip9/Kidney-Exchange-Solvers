@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <title>CS170 KEP Visualization</title>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.2.2/jquery.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/lodash/4.11.1/lodash.min.js"></script>
+    <script src="http://cytoscape.github.io/cytoscape.js/api/cytoscape.js-latest/cytoscape.min.js"></script>
+    <script type="text/javascript">
+      $(function() {
+        var parse = function(text) {
+          return _(text)
+            .split('\n')
+            .map(_.trim)
+            .map(function(line) { return _.split(line, ' '); })
+            .value();
+        };
+
+        var createGraph = function(n, children, adj_mat) {
+          var nodes = _.times(n, function(i) {
+            return {
+              data: {
+                id: i,
+                color: children.has(String(i)) ? '#3e3984' : '#398449',
+              }
+            };
+          });
+
+          var edges = _.flatMap(adj_mat, function(adj, i) {
+            console.log('i = ' + i);
+            console.log('adj:');
+            console.log(adj);
+            var new_edges = [];
+            for (var j = 0; j < n; j++) {
+              if (adj[j] === '1') {
+                var new_edge = {
+                  data: {
+                    id: 'e_' + i + '->' + j,
+                    source: i,
+                    target: j,
+                  }
+                };
+                new_edges.push(new_edge);
+              }
+            }
+            return new_edges;
+          });
+
+          return {
+            nodes: nodes,
+            edges: edges,
+          };
+        };
+
+        $('#file-picker-button').click(function() {
+          $('#file-picker').click();
+        });
+
+        $('#file-picker').change(function(e) {
+          var file = e.target.files[0];
+          var reader = new FileReader();
+          reader.onload = function() {
+            console.log('read file')
+
+            var parsed = parse(reader.result);
+            console.log('parsed:');
+            console.log(parsed);
+
+            var n = parsed[0];
+            var children = new Set(parsed[1]);
+            var adj_mat = _.slice(parsed, 2);
+
+            console.log('n = ' + n);
+            console.log('children = ' + children);
+
+            var elements = createGraph(n, children, adj_mat);
+
+            console.log('elements:');
+            console.log(elements);
+
+            var cose_layout = {
+              name: 'cose',
+              fit: false,
+              padding: 60,
+              componentSpacing: 200,
+              nodeOverlap: 20,
+              gravity: 40,
+            };
+
+            var circle_layout = {
+              name: 'circle',
+              fit: false,
+              padding: 60,
+            };
+
+            var layout = cose_layout;
+
+            $('#cy').remove();
+            $('body').append('<div id="cy"></div>');
+            var cy = cytoscape({
+              container: $('#cy'),
+              elements: elements,
+              style: cytoscape.stylesheet()
+                .selector('node')
+                  .css({
+                    'width': '20',
+                    'height': '20',
+                    'content': 'data(id)',
+                    'text-halign': 'center',
+                    'text-valign': 'center',
+                    'font-size': '10px',
+                    'background-color': 'data(color)',
+                    'color': '#eee'
+                  })
+                .selector('edge')
+                  .css({
+                    // 'opacity': '0.5',
+                    'width': '1',
+                    'curve-style': 'haystack',
+                    // 'curve-style': 'bezier',
+                    'target-arrow-shape': 'triangle',
+                  }),
+              layout: layout
+            });
+          };
+          reader.readAsText(file);
+        });
+      });
+    </script>
+    <style>
+      html, body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        background-color: #1e1e1e;
+      }
+
+      #cy {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 0;
+        bottom: 0;
+        background-color: #1e1e1e;
+      }
+
+      #file-picker {
+        display: none;
+      }
+
+      #file-picker-button {
+        z-index: 10000;
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        background: #f9f9f9;
+        border: 1px solid #88c;
+        padding: 10px;
+        border-radius: 5px;
+        margin: 10px;
+        cursor: pointer;
+        opacity: 0.1;
+        transition: opacity 0.3s;
+      }
+
+      #file-picker-button:hover {
+        opacity: 1;
+      }
+    </style>
+  </head>
+  <body>
+    <input type="button" id="file-picker-button" value="Choose Input" />
+    <input type="file" id="file-picker" />
+  </body>
+</html>
