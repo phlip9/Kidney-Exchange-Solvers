@@ -64,10 +64,11 @@ def solve(A, C, k):
     objval = 0.0
     for A_i, C_i, inv_map_i in subproblems:
         cycles_i, objval_i = solve_subproblem(A_i, C_i, inv_map_i, k)
-        print('cycles_i =', cycles_i)
-        print('objval_i =', objval_i)
+        # print('cycles_i =', cycles_i)
+        # print('objval_i =', objval_i)
         cycles.extend(cycles_i)
         objval += objval_i
+    check_cycles(A, C, k, cycles, objval)
     return cycles, objval
 
 def solve_subproblem(A, C, inv_map, k):
@@ -112,31 +113,23 @@ def constantino(A, C, k):
     print('[%.1f] Generated variables' % (time.clock() - t_0))
     print('[%.1f] Adding flow constraints...' % (time.clock() - t_0))
 
-    # Constraint (2), (5), (6): Flow in = Flow out and symmetry reducers
+    # Constraint (2): Flow in = Flow out
     for l in range(n):
         for i in range(l, n):
+            # Flow in
             lhs_vars = [vars[e] for e in edges.select(l, _, i)]
             ones = [1.0]*len(lhs_vars)
             lhs = LinExpr()
             lhs.addTerms(ones, lhs_vars)
 
+            # Flow out
             rhs_vars = [vars[e] for e in edges.select(l, i, _)]
             ones = [1.0]*len(rhs_vars)
             rhs = LinExpr()
             rhs.addTerms(ones, rhs_vars)
 
+            # Flow in = Flow out
             m.addConstr(lhs == rhs)
-
-            # if i < l:
-                # m.addConstr(lhs == 0)
-            # elif i > l:
-            if i > l:
-                rhs2_vars = [vars[e] for e in edges.select(l, l, _)]
-                ones = [1.0]*len(rhs2_vars)
-                rhs2 = LinExpr()
-                rhs2.addTerms(ones, rhs2_vars)
-
-                m.addConstr(lhs <= rhs2)
 
         if l % 10 == 0 and l != 0:
             print('[%.1f] l = %d' % (time.clock() - t_0, l))
@@ -150,7 +143,7 @@ def constantino(A, C, k):
         ones = [1.0]*len(c_vars)
         expr = LinExpr()
         expr.addTerms(ones, c_vars)
-        m.addConstr(expr <= 1)
+        m.addConstr(expr <= 1.0)
 
         if i % 10 == 0 and i != 0:
             print('[%.1f] V_i = %d' % (time.clock() - t_0, i))
@@ -170,31 +163,61 @@ def constantino(A, C, k):
             print('[%.1f] l = %d' % (time.clock() - t_0, l))
 
     print('[%.1f] Added cycle cardinality constraints' % (time.clock() - t_0))
+    print('[%.1f] Adding cycle index constraints...' % (time.clock() - t_0))
+
+    # Constraint (5): Cycle index is smallest vertex-index
+    for l in range(n):
+        rhs_vars = [vars[e] for e in edges.select(l, l, _)]
+        ones = [1.0]*len(rhs_vars)
+        rhs = LinExpr()
+        rhs.addTerms(ones, rhs_vars)
+
+        for i in range(l+1, n):
+            lhs_vars = [vars[e] for e in edges.select(l, i, _)]
+            if len(lhs_vars) > 0:
+                ones = [1.0]*len(lhs_vars)
+                lhs = LinExpr()
+                lhs.addTerms(ones, lhs_vars)
+
+                m.addConstr(lhs <= rhs)
+
+        if l % 10 == 0 and l != 0:
+            print('[%.1f] l = %d' % (time.clock() - t_0, l))
+
+    print('[%.1f] Added cycle index constraints...' % (time.clock() - t_0))
     print('[%.1f] Begin Optimizing' % (time.clock() - t_0))
 
     m.optimize()
     m.update()
 
     print('[%.1f] Finished Optimizing' % (time.clock() - t_0))
+    print('[%.1f] Building cycles...' % (time.clock() - t_0))
 
     cycles = []
     for l in range(n):
-        cycle = []
-        c_edges = [e for e in edges.select(l, _, _)]
-        c_vars = [vars[e] for e in c_edges]
         c_edges = [e for e in edges.select(l, _, _) if vars[e].x == 1.0]
         n_edges = len(c_edges)
+
         if n_edges != 0:
-            e = c_edges[0]
-            cycle.append(e[1])
-            for i in range(1, n_edges):
+            while len(c_edges) > 0:
+                cycle = []
+                e = c_edges.pop(0)
+                i = e[1]
                 j = e[2]
-                for p in range(n_edges):
-                    e = c_edges[p]
+                cycle.append(i)
+                k = 0
+                while True:
+                    e = c_edges[k]
                     if e[1] == j:
+                        c_edges.pop(k)
+                        k = 0
                         cycle.append(e[1])
-                        break
-            cycles.append(cycle)
+                        j = e[2]
+                        if j == i:
+                            break
+                    else:
+                        k += 1
+                cycles.append(cycle)
 
     print('[%.1f] Finished building cycles' % (time.clock() - t_0))
 
@@ -221,6 +244,34 @@ def test():
     print('z =', z.x)
     print('objective =', m.objval)
 
+def check_cycles(A, C, k, cycles, objval):
+    n = A.shape[0]
+    used = [False for i in range(n)]
+    r_objval = 0.0
+    for cycle in cycles:
+        len_cycle = len(cycle)
+        if len_cycle <= 1:
+            print('ERROR: cycle of length <= 1 :', cycle)
+        if len_cycle > k + 1:
+            print('ERROR: cycle of length >=', k, ':', cycle)
+        if len(set(cycle)) != len_cycle:
+            print('ERROR: duplicate vertex in cycle :', cycle)
+
+        for v in cycle:
+            if used[v]:
+                print('ERROR: cycle contains already-used vertex :', cycle, '(', v, ')')
+            if v < 0 or v >= n:
+                print('ERROR: vertex out of range:', v)
+            used[v] = True
+            r_objval += 2 if v in C else 1
+
+        for i in range(1, len_cycle + 1):
+            if A[cycle[i - 1], cycle[i % len_cycle]] != 1:
+                print('ERROR: cycle contains nonexistent edge :', cycle, '(', cycle[i - 1], ',', cycle[i % len_cycle], ')')
+
+    if r_objval != objval:
+        print('ERROR: reported objective value != real objective value : r_objval =', r_objval, ', objval =', objval)
+
 def test_preprocess():
     A = np.array([
         [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -240,11 +291,15 @@ def test_preprocess():
 
     preprocess(A, [1, 4, 9, 11], 5)
 
+
+# print(serialize(A), end='')
+
 # test_preprocess()
 
 # print(solve(A, [], 5))
 
-print(solve_file('MILP_LOVERS3.in', 5))
+# print(solve_file('phase1-processed/2.in', 5))
+print(solve_file('phase1-processed/6.in', 5))
 
 # test()
 # print(serialize(*read('MILP_LOVERS2.in')), end='')
