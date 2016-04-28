@@ -2,12 +2,14 @@ from gurobipy import Model, GRB, tuplelist, LinExpr
 from instance_gen import serialize, connected_components
 import numpy as np
 import time
+from sys import argv
 
 def read(filename):
     with open(filename, 'r') as f:
         lines = [[int(x) for x in line.split()] for line in f]
+        n = lines[0][0]
         C = set(lines[1])
-        A = np.array(lines[2:])
+        A = np.array(lines[2:n+2])
         return A, C
 
 def preprocess(A, C, k):
@@ -52,6 +54,13 @@ def preprocess(A, C, k):
     # print('subproblems =', subproblems)
 
     return subproblems
+
+def solve_instance(i):
+    filename = 'phase1-processed/%d.in' % int(argv[1])
+    cycles, objval = solve_file(filename)
+    print('cycles:', cycles)
+    print('objval:', objval)
+
 
 def solve_file(filename, k):
     A, C = read(filename)
@@ -292,19 +301,6 @@ def test_preprocess():
     preprocess(A, [1, 4, 9, 11], 5)
 
 
-# print(serialize(A), end='')
-
-# test_preprocess()
-
-# print(solve(A, [], 5))
-
-# print(solve_file('phase1-processed/2.in', 5))
-print(solve_file('phase1-processed/6.in', 5))
-
-# test()
-# print(serialize(*read('MILP_LOVERS2.in')), end='')
-
-# A, C = read('MILP_LOVERS3.in')
-# cycles, objval = constantino(A, C, 5)
-# print('cycles =', cycles)
-# print('objval =', objval)
+if __name__ == '__main__':
+    if len(argv) > 1 and int(argv[1]) in range(1, 493):
+        solve_instance(int(argv[1]))
