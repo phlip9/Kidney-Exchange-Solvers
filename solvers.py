@@ -3,6 +3,7 @@ from instance_gen import serialize, connected_components
 import numpy as np
 import time
 from sys import argv
+from os import path
 
 def read(filename):
     with open(filename, 'r') as f:
@@ -55,24 +56,43 @@ def preprocess(A, C, k):
 
     return subproblems
 
-def solve_instance(i):
+def format_cycles(cycles):
+    if len(cycles) == 0:
+        return 'None'
+    cycles = [' '.join(map(str, cycle)) for cycle in cycles]
+    return '; '.join(cycles)
+
+def output(i, cycles, objval, gap):
+    filename = './out/%d.out' % i
+    if path.isfile(filename):
+        with open(filename, 'r') as f:
+            objval2 = int(f.readline())
+            if objval2 >= objval:
+                return
+    with open(filename, 'w') as f:
+        f.write(str(objval) + '\n')
+        f.write(str(gap) + '\n')
+        f.write(format_cycles(cycles) + '\n')
+
+def solve_instance(i, k, gap):
     filename = 'phase1-processed/%d.in' % int(argv[1])
-    cycles, objval = solve_file(filename)
+    cycles, objval = solve_file(filename, k, gap)
     print('cycles:', cycles)
     print('objval:', objval)
+    output(i, cycles, objval, gap)
 
-
-def solve_file(filename, k):
+def solve_file(filename, k, gap):
     A, C = read(filename)
-    return solve(A, C, k)
+    print('Solving', A.shape[0], 'node graph')
+    return solve(A, C, k, gap)
 
-def solve(A, C, k):
+def solve(A, C, k, gap):
     subproblems = preprocess(A, C, k)
     print('Decomposed into %d subproblems' % len(subproblems))
     cycles = []
     objval = 0.0
     for A_i, C_i, inv_map_i in subproblems:
-        cycles_i, objval_i = solve_subproblem(A_i, C_i, inv_map_i, k)
+        cycles_i, objval_i = solve_subproblem(A_i, C_i, inv_map_i, k, gap)
         # print('cycles_i =', cycles_i)
         # print('objval_i =', objval_i)
         cycles.extend(cycles_i)
@@ -80,13 +100,13 @@ def solve(A, C, k):
     check_cycles(A, C, k, cycles, objval)
     return cycles, objval
 
-def solve_subproblem(A, C, inv_map, k):
-    cycles, objval = constantino(A, C, k)
+def solve_subproblem(A, C, inv_map, k, gap):
+    cycles, objval = constantino(A, C, k, gap)
     print('cycles_i (pre_inv) =', cycles)
     cycles = [[inv_map[c] for c in cycle] for cycle in cycles]
     return cycles, objval
 
-def constantino(A, C, k):
+def constantino(A, C, k, gap):
     """
     Polynomial-sized CCMcP Edge-Extended Model
     See Constantino et al. (2013)
@@ -95,6 +115,11 @@ def constantino(A, C, k):
     _ = '*'
     m = Model()
     m.modelsense = GRB.MAXIMIZE
+    m.params.mipgap = gap
+    m.params.nodefilestart = 1.0
+    m.params.nodefiledir = './.nodefiledir'
+    # m.params.presparsify = 0
+    # m.params.presolve = 0
 
     n = A.shape[0]
     vars = {}
@@ -110,7 +135,6 @@ def constantino(A, C, k):
                     e = (l, i, j)
                     edges.append(e)
                     w = 2 if j in C else 1
-                    # var = m.addVar(vtype=GRB.BINARY, obj=w, name='x^%d_{%d,%d}' % e)
                     var = m.addVar(vtype=GRB.BINARY, obj=w)
                     vars[e] = var
 
@@ -232,27 +256,6 @@ def constantino(A, C, k):
 
     return cycles, m.objval
 
-def test():
-    m = Model("mip1")
-
-    x = m.addVar(vtype=GRB.BINARY, name='x')
-    y = m.addVar(vtype=GRB.BINARY, name='y')
-    z = m.addVar(vtype=GRB.BINARY, name='z')
-
-    m.update()
-
-    m.setObjective(x + y + 2 * z, GRB.MAXIMIZE)
-
-    m.addConstr(x + 2 * y + 3 * z <= 4, 'c0')
-    m.addConstr(x + y >= 1, 'c1')
-
-    m.optimize()
-
-    print('x =', x.x)
-    print('y =', y.x)
-    print('z =', z.x)
-    print('objective =', m.objval)
-
 def check_cycles(A, C, k, cycles, objval):
     n = A.shape[0]
     used = [False for i in range(n)]
@@ -281,26 +284,10 @@ def check_cycles(A, C, k, cycles, objval):
     if r_objval != objval:
         print('ERROR: reported objective value != real objective value : r_objval =', r_objval, ', objval =', objval)
 
-def test_preprocess():
-    A = np.array([
-        [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
-        [1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
-        [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-        [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
-    ])
-
-    preprocess(A, [1, 4, 9, 11], 5)
-
 
 if __name__ == '__main__':
     if len(argv) > 1 and int(argv[1]) in range(1, 493):
-        solve_instance(int(argv[1]))
+        gap = 1e-4
+        if len(argv) > 2:
+            gap = float(argv[2])
+        solve_instance(int(argv[1]), 5, gap)
