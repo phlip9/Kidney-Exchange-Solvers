@@ -4,6 +4,7 @@ import numpy as np
 import time
 from sys import argv
 from os import path
+from itertools import chain
 
 def read(filename):
     with open(filename, 'r') as f:
@@ -21,7 +22,6 @@ def preprocess(A, C, k):
     subproblems = []
     n = A.shape[0]
     n_scc, scc = connected_components(A)
-    # print('scc =', scc)
     if n_scc == 1:
         inv_map = [0]*n
         for i in range(n):
@@ -34,8 +34,6 @@ def preprocess(A, C, k):
             j = scc[i]
             fwd_map.append(scc_off[j])
             scc_off[j] += 1
-        # print('scc_off =', scc_off)
-        # print('fwd_map =', fwd_map)
 
         for i in range(n_scc):
             mask = scc == i
@@ -45,14 +43,7 @@ def preprocess(A, C, k):
                 if scc[j] == i:
                     inv_map.append(j)
             C_i = set(fwd_map[c] for c in C if scc[c] == i)
-            # print('i =', i)
-            # print('A_i =')
-            # print(A_i)
-            # print('C_i =', C_i)
-            # print('inv_map =', inv_map)
             subproblems.append((A_i, C_i, inv_map))
-
-    # print('subproblems =', subproblems)
 
     return subproblems
 
@@ -66,7 +57,7 @@ def output(i, cycles, objval, gap):
     filename = './out/%d.out' % i
     if path.isfile(filename):
         with open(filename, 'r') as f:
-            objval2 = int(f.readline())
+            objval2 = float(f.readline())
             if objval2 >= objval:
                 return
     with open(filename, 'w') as f:
@@ -75,15 +66,18 @@ def output(i, cycles, objval, gap):
         f.write(format_cycles(cycles) + '\n')
 
 def solve_instance(i, k, gap):
-    filename = 'phase1-processed/%d.in' % int(argv[1])
+    print('Solving instance %d with gap %%%0.2f' % (i, gap))
+    filename = 'phase1-processed/%d.in' % i
     cycles, objval = solve_file(filename, k, gap)
     print('cycles:', cycles)
     print('objval:', objval)
-    output(i, cycles, objval, gap)
+    # output(i, cycles, objval, gap)
 
 def solve_file(filename, k, gap):
     A, C = read(filename)
-    print('Solving', A.shape[0], 'node graph')
+    n = A.shape[0]
+    d = np.sum(A)/(n*n - n)
+    print('Solving', n, 'node graph with density', d)
     return solve(A, C, k, gap)
 
 def solve(A, C, k, gap):
@@ -102,9 +96,148 @@ def solve(A, C, k, gap):
 
 def solve_subproblem(A, C, inv_map, k, gap):
     cycles, objval = constantino(A, C, k, gap)
+    # cycles, objval = two_cycle(A, C, gap)
+    # cycles, objval = lazy_cycle_constraint(A, C, k, gap)
     print('cycles_i (pre_inv) =', cycles)
     cycles = [[inv_map[c] for c in cycle] for cycle in cycles]
     return cycles, objval
+
+def two_cycle(A, C, gap):
+    """
+    Solve high-vertex dense graphs by reduction to
+    weighted matching ILP.
+    """
+    _ = '*'
+    m = Model()
+    m.modelsense = GRB.MAXIMIZE
+    m.params.mipgap = gap
+    m.params.timelimit = 60 * 60
+
+    n = A.shape[0]
+    vars = {}
+    edges = tuplelist()
+
+    # model as undirected graph
+    for i in range(n):
+        for j in range(i+1, n):
+            if A[i, j] == 1 and A[j, i] == 1:
+                e = (i, j)
+                edges.append(e)
+                w_i = 2 if i in C else 1
+                w_j = 2 if j in C else 1
+                w = w_i + w_j
+                var = m.addVar(vtype=GRB.BINARY, obj=w)
+                vars[e] = var
+
+    m.update()
+
+    # 2 cycle constraint <=> undirected flow <= 1
+    for i in range(n):
+        lhs = LinExpr()
+        lhs_vars = [vars[e] for e in chain(edges.select(i, _), edges.select(_, i))]
+        ones = [1.0]*len(lhs_vars)
+        lhs.addTerms(ones, lhs_vars)
+
+        m.addConstr(lhs <= 1)
+
+    m.optimize()
+    m.update()
+
+    cycles = [list(e) for e in edges if vars[e].x == 1.0]
+    return cycles, m.objval
+
+def cycles_from_edges(c_edges):
+    cycles = []
+    n_edges = len(c_edges)
+    if n_edges != 0:
+        while len(c_edges) > 0:
+            cycle = []
+            e = c_edges.pop(0)
+            i = e[0]
+            j = e[1]
+            cycle.append(i)
+            k = 0
+            while True:
+                e = c_edges[k]
+                if e[0] == j:
+                    c_edges.pop(k)
+                    k = 0
+                    cycle.append(e[0])
+                    j = e[1]
+                    if j == i:
+                        break
+                else:
+                    k += 1
+            cycles.append(cycle)
+    return cycles
+
+def lazy_cycle_constraint(A, C, k, gap):
+    """
+    Lazily generate cycle constraints as potential feasible solutions
+    are generated.
+    """
+    _ = '*'
+    m = Model()
+    m.modelsense = GRB.MAXIMIZE
+    m.params.mipgap = gap
+    m.params.timelimit = 5 * 60 * 60
+    m.params.lazyconstraints = 1
+
+    n = A.shape[0]
+    edges = tuplelist()
+    vars = {}
+
+    for i in range(n):
+        for j in range(n):
+            if A[i, j] == 1:
+                e = (i, j)
+                edges.append(e)
+                w = 2 if j in C else 1
+                var = m.addVar(vtype=GRB.BINARY, obj=w)
+                vars[e] = var
+
+    m.update()
+
+    # flow constraints
+    for i in range(n):
+        out_vars = [vars[e] for e in edges.select(i, _)]
+        out_ones = [1.0]*len(out_vars)
+        out_expr = LinExpr()
+        out_expr.addTerms(out_ones, out_vars)
+
+        in_vars = [vars[e] for e in edges.select(_, i)]
+        in_ones = [1.0]*len(in_vars)
+        in_expr = LinExpr()
+        in_expr.addTerms(in_ones, in_vars)
+
+        m.addConstr(in_expr <= 1)
+        m.addConstr(out_expr == in_expr)
+
+    m.update()
+
+    ith_cycle = 0
+
+    def callback(model, where):
+        if where == GRB.Callback.MIPSOL:
+            sols = model.cbGetSolution([vars[e] for e in edges])
+            c_edges = [edges[i] for i in range(len(edges)) if sols[i] > 0.5]
+            cycles = cycles_from_edges(c_edges)
+            for cycle in cycles:
+                len_cycle = len(cycle)
+                if len_cycle > k:
+                    cycle_vars = [vars[(cycle[i], cycle[(i+1) % len_cycle])] for i in range(len_cycle)]
+                    ones = [1.0]*len(cycle_vars)
+                    expr = LinExpr()
+                    expr.addTerms(ones, cycle_vars)
+                    model.cbLazy(expr <= len_cycle - 1)
+
+    m.optimize(callback)
+    m.update()
+
+    c_edges = [e for e in edges if vars[e].x == 1.0]
+    cycles = cycles_from_edges(c_edges)
+
+    return cycles, m.objval
 
 def constantino(A, C, k, gap):
     """
@@ -116,8 +249,9 @@ def constantino(A, C, k, gap):
     m = Model()
     m.modelsense = GRB.MAXIMIZE
     m.params.mipgap = gap
-    m.params.nodefilestart = 1.0
-    m.params.nodefiledir = './.nodefiledir'
+    # m.params.timelimit = 60 * 60
+    # m.params.nodefilestart = 1.0
+    # m.params.nodefiledir = './.nodefiledir'
     # m.params.presparsify = 0
     # m.params.presolve = 0
 
@@ -138,7 +272,7 @@ def constantino(A, C, k, gap):
                     var = m.addVar(vtype=GRB.BINARY, obj=w)
                     vars[e] = var
 
-        if l % 10 == 0 and l != 0:
+        if l % 100 == 0 and l != 0:
             print('[%.1f] l = %d' % (time.clock() - t_0, l))
 
     m.update()
@@ -164,7 +298,7 @@ def constantino(A, C, k, gap):
             # Flow in = Flow out
             m.addConstr(lhs == rhs)
 
-        if l % 10 == 0 and l != 0:
+        if l % 100 == 0 and l != 0:
             print('[%.1f] l = %d' % (time.clock() - t_0, l))
 
     print('[%.1f] Added flow constraints' % (time.clock() - t_0))
@@ -178,7 +312,7 @@ def constantino(A, C, k, gap):
         expr.addTerms(ones, c_vars)
         m.addConstr(expr <= 1.0)
 
-        if i % 10 == 0 and i != 0:
+        if i % 100 == 0 and i != 0:
             print('[%.1f] V_i = %d' % (time.clock() - t_0, i))
 
     print('[%.1f] Added cycle vertex constraints' % (time.clock() - t_0))
@@ -192,7 +326,7 @@ def constantino(A, C, k, gap):
         expr.addTerms(ones, c_vars)
         m.addConstr(expr <= k)
 
-        if l % 10 == 0 and l != 0:
+        if l % 100 == 0 and l != 0:
             print('[%.1f] l = %d' % (time.clock() - t_0, l))
 
     print('[%.1f] Added cycle cardinality constraints' % (time.clock() - t_0))
@@ -214,11 +348,11 @@ def constantino(A, C, k, gap):
 
                 m.addConstr(lhs <= rhs)
 
-        if l % 10 == 0 and l != 0:
+        if l % 100 == 0 and l != 0:
             print('[%.1f] l = %d' % (time.clock() - t_0, l))
 
     print('[%.1f] Added cycle index constraints...' % (time.clock() - t_0))
-    print('[%.1f] Begin Optimizing' % (time.clock() - t_0))
+    print('[%.1f] Begin Optimizing %d vertex model' % (time.clock() - t_0, n))
 
     m.optimize()
     m.update()
@@ -228,29 +362,8 @@ def constantino(A, C, k, gap):
 
     cycles = []
     for l in range(n):
-        c_edges = [e for e in edges.select(l, _, _) if vars[e].x == 1.0]
-        n_edges = len(c_edges)
-
-        if n_edges != 0:
-            while len(c_edges) > 0:
-                cycle = []
-                e = c_edges.pop(0)
-                i = e[1]
-                j = e[2]
-                cycle.append(i)
-                k = 0
-                while True:
-                    e = c_edges[k]
-                    if e[1] == j:
-                        c_edges.pop(k)
-                        k = 0
-                        cycle.append(e[1])
-                        j = e[2]
-                        if j == i:
-                            break
-                    else:
-                        k += 1
-                cycles.append(cycle)
+        c_edges = [(e[1], e[2]) for e in edges.select(l, _, _) if vars[e].x == 1.0]
+        cycles.extend(cycles_from_edges(c_edges))
 
     print('[%.1f] Finished building cycles' % (time.clock() - t_0))
 
