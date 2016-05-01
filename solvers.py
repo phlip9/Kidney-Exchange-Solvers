@@ -71,7 +71,7 @@ def solve_instance(i, k, gap):
     cycles, objval = solve_file(filename, k, gap)
     print('cycles:', cycles)
     print('objval:', objval)
-    # output(i, cycles, objval, gap)
+    output(i, cycles, objval, gap)
 
 def solve_file(filename, k, gap):
     A, C = read(filename)
@@ -95,8 +95,8 @@ def solve(A, C, k, gap):
     return cycles, objval
 
 def solve_subproblem(A, C, inv_map, k, gap):
-    cycles, objval = constantino(A, C, k, gap)
-    # cycles, objval = two_cycle(A, C, gap)
+    # cycles, objval = constantino(A, C, k, gap)
+    cycles, objval = two_cycle(A, C, gap)
     # cycles, objval = lazy_cycle_constraint(A, C, k, gap)
     print('cycles_i (pre_inv) =', cycles)
     cycles = [[inv_map[c] for c in cycle] for cycle in cycles]
