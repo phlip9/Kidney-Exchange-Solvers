@@ -14,6 +14,10 @@ def read(filename):
         A = np.array(lines[2:n+2])
         return A, C
 
+def read_instance(i):
+    filename = 'phase1-processed/%d.in' % i
+    return read(filename)
+
 def preprocess(A, C, k):
     """
     Split graph into Strongly Connected Components and remove
