@@ -1,8 +1,10 @@
 from solvers import read, solve_instance, preprocess
 import numpy as np
+from sys import argv
 
 def solve_constantino(l, r):
     for i in range(l, r):
+        print('Constantino solver %d in [%d, %d)' % (i, l, r))
         filename = 'phase1-processed/%d.in' % i
         A, C = read(filename)
         subproblems = preprocess(A, C, 5)
@@ -15,6 +17,12 @@ def solve_constantino(l, r):
 
 def solve_two_cycle(l, r):
     for i in range(l, r):
+        print('Two cycle solver %d in [%d, %d)' % (i, l, r))
         solve_instance(i, 5, 0.01)
 
-solve_constantino(1, 50)
+# solve_constantino(1, 50)
+
+if __name__=='__main__':
+    l = int(argv[1])
+    r = int(argv[2])
+    solve_constantino(l, r)

@@ -25,25 +25,25 @@ instanceSizes = [499,51,500,500,500,35,18,200,498,500,480,500,200,500,500,500,10
 
 def main(argv):
 	if len(argv) != 1:
-		print "Usage: python solutions_validator.py [path_to_input_file]"
+		print("Usage: python solutions_validator.py [path_to_input_file]")
 		return
 	allPassed = True
 	lineIndex = 0
 	with open(argv[0], "r") as f:
 		for line in f:
 			if lineIndex >= len(instanceSizes):
-				print "Extra data at end of file"
+				print("Extra data at end of file")
 				return
 			result = processTest(line.strip('\n'), instanceSizes[lineIndex])
 			if result != "solution ok":
-				print "Error with test " + str(lineIndex + 1) + ": " + result
+				print("Error with test " + str(lineIndex + 1) + ": " + result)
 				allPassed = False
 			lineIndex += 1
 	if lineIndex < len(instanceSizes):
-		print "File terminated early; missing lines"
+		print("File terminated early; missing lines")
 		return
 	if allPassed:
-                print "all solution lines ok"
+                print("all solution lines ok")
 
 # line is a list of strings
 def processTest(line, N):
