@@ -1,5 +1,6 @@
 from sys import argv
 import numpy as np
+from random import shuffle
 
 
 def read(filename):
@@ -15,17 +16,26 @@ def run(i, k):
     """
     Run our greedy algorithm on the ith instance with k max cycle length.
     """
-    solve_greedy(i, k)
-
-
-def solve_greedy(i, k, permutation):
-    """
-    permutation - a permutation of 1 to n
-    """
     filename = 'phase1-processed/%d.in' % i
     A, C = read(filename)
-    A_copy = np.copy(A)
     n = A.shape[0]
+    solutions = []
+    solutions.append(solve_greedy(A, C, n, k, range(n)))
+    for i in range(5):
+        perm = list(range(n))
+        shuffle(perm)
+        solutions.append(solve_greedy(A, C, n, k, perm))
+    return max(solutions)
+
+def solve_greedy(A, C, n, k, perm):
+    """
+    A - adjancency matrix
+    C - children
+    n - size of our adjancy matrix
+    k - max cycle length
+    perm - a permutation of 1 to n
+    """
+    A_copy = np.copy(A)
     matched = set()
     total_weight = 0
     cycles = []
@@ -33,10 +43,10 @@ def solve_greedy(i, k, permutation):
         start = None
         best_weight = 0
         best_cycle = None
-        for i in range(n):
+        for i in perm:
             if i in matched:
                 continue
-            cycle, weight = dfs_from(i, A, C, k, 5)
+            weight, cycle = dfs_from(i, A, C, k, 5)
             if cycle is None:
                 continue
             if weight > best_weight:
@@ -45,7 +55,6 @@ def solve_greedy(i, k, permutation):
                 best_cycle = cycle
         if best_cycle is None:
             break
-        print("start: %d, weight: %d: %s" % (start, best_weight, str(best_cycle)))
         total_weight += best_weight
         for vertex in best_cycle:
             matched.add(vertex)
@@ -53,8 +62,8 @@ def solve_greedy(i, k, permutation):
                 A[vertex][j] = 0
                 A[j][vertex] = 0
         cycles.append(best_cycle)
-    print(total_weight)
     check_cycles(A_copy, C, k, cycles, total_weight)
+    return total_weight, cycles
 
 
 def dfs_from(i, A, C, k, L):
@@ -92,14 +101,8 @@ def best_cycle(cycles, A, C):
                 weight += 2
             else:
                 weight += 1
-        weights.append(weight)
-    max_weight = 0
-    best_cycle = None
-    for i in range(len(weights)):
-        if weights[i] > max_weight:
-            max_weight = weights[i]
-            best_cycle = cycles[i]
-    return best_cycle, max_weight
+        weights.append((weight, cycle))
+    return max(weights)
 
 
 def check_cycles(A, C, k, cycles, objval):
@@ -132,4 +135,4 @@ def check_cycles(A, C, k, cycles, objval):
 
 if __name__ == '__main__':
     if len(argv) > 1 and int(argv[1]) in range(1, 493):
-        solve_greedy(int(argv[1]), 5)
+        print(run(int(argv[1]), 5))
