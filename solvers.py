@@ -14,6 +14,10 @@ def read(filename):
         A = np.array(lines[2:n+2])
         return A, C
 
+def read_instance(i):
+    filename = 'phase1-processed/%d.in' % i
+    return read(filename)
+
 def preprocess(A, C, k):
     """
     Split graph into Strongly Connected Components and remove
@@ -95,8 +99,8 @@ def solve(A, C, k, gap):
     return cycles, objval
 
 def solve_subproblem(A, C, inv_map, k, gap):
-    # cycles, objval = constantino(A, C, k, gap)
-    cycles, objval = two_cycle(A, C, gap)
+    cycles, objval = constantino(A, C, k, gap)
+    # cycles, objval = two_cycle(A, C, gap)
     # cycles, objval = lazy_cycle_constraint(A, C, k, gap)
     print('cycles_i (pre_inv) =', cycles)
     cycles = [[inv_map[c] for c in cycle] for cycle in cycles]
