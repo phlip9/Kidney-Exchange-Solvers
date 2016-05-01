@@ -20,12 +20,15 @@ def run(i, k):
     A, C = read(filename)
     n = A.shape[0]
     solutions = []
-    solutions.append(solve_greedy(A, C, n, k, range(n)))
+    solutions.append(solve_greedy(np.copy(A), C, n, k, range(n)))
     for i in range(5):
+        A_copy = np.copy(A)
         perm = list(range(n))
         shuffle(perm)
-        solutions.append(solve_greedy(A, C, n, k, perm))
-    return max(solutions)
+        sol = solve_greedy(A_copy, C, n, k, perm)
+        solutions.append(sol)
+        print(sol)
+    return max(solutions[0])
 
 def solve_greedy(A, C, n, k, perm):
     """
