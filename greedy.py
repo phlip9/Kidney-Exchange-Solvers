@@ -47,7 +47,8 @@ def run(i, k):
         perm = list(range(n))
         shuffle(perm)
         sol = solve_greedy(A_copy, C, n, k, perm)
-        solutions.append(sol)
+        if sol[1] is not None:
+            solutions.append(sol)
         print(sol[0])
     return max(solutions)
 
@@ -79,13 +80,18 @@ def solve_greedy(A, C, n, k, perm):
             break
         total_weight += best_weight
         for vertex in best_cycle:
+            if vertex in matched:
+                print("ERR: %d already matched" % vertex)
             matched.add(vertex)
-            for j in range(1, n):
+            for j in range(n):
                 A[vertex][j] = 0
                 A[j][vertex] = 0
         cycles.append(best_cycle)
-    check_cycles(A_copy, C, k, cycles, total_weight)
-    return total_weight, cycles
+    if check_cycles(A_copy, C, k, cycles, total_weight):
+        return total_weight, cycles
+    else:
+        print("Returning false")
+        return 0, None
 
 
 def dfs_from(i, A, C, k, L):
@@ -135,25 +141,33 @@ def check_cycles(A, C, k, cycles, objval):
         len_cycle = len(cycle)
         if len_cycle <= 1:
             print('ERROR: cycle of length <= 1 :', cycle)
+            return False
         if len_cycle > k + 1:
             print('ERROR: cycle of length >=', k, ':', cycle)
+            return False
         if len(set(cycle)) != len_cycle:
             print('ERROR: duplicate vertex in cycle :', cycle)
+            return False
 
         for v in cycle:
             if used[v]:
                 print('ERROR: cycle contains already-used vertex :', cycle, '(', v, ')')
+                return False
             if v < 0 or v >= n:
                 print('ERROR: vertex out of range:', v)
+                return False
             used[v] = True
             r_objval += 2 if v in C else 1
 
         for i in range(1, len_cycle + 1):
             if A[cycle[i - 1], cycle[i % len_cycle]] != 1:
                 print('ERROR: cycle contains nonexistent edge :', cycle, '(', cycle[i - 1], ',', cycle[i % len_cycle], ')')
+                return False
 
     if r_objval != objval:
         print('ERROR: reported objective value != real objective value : r_objval =', r_objval, ', objval =', objval)
+        return False
+    return True
 
 def run_inst(i):
         solution = run(i, 5)
