@@ -114,7 +114,7 @@ def dfs_from(i, A, C, k, L):
 
 def best_cycle(cycles, A, C):
     if len(cycles) == 0:
-        return None, 0
+        return 0, None
     weights = []
     for cycle in cycles:
         weight = 0
