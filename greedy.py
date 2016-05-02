@@ -1,6 +1,7 @@
 from sys import argv
 import numpy as np
 from random import shuffle
+from os import path
 
 
 def read(filename):
@@ -12,6 +13,25 @@ def read(filename):
         return A, C
 
 
+def output(i, cycles, objval, gap):
+    filename = './out/%d.out' % i
+    if path.isfile(filename):
+        with open(filename, 'r') as f:
+            objval2 = float(f.readline())
+            if objval2 >= objval:
+                return
+    with open(filename, 'w') as f:
+        f.write(str(objval) + '\n')
+        f.write(str(gap) + '\n')
+        f.write(format_cycles(cycles) + '\n')
+
+
+def format_cycles(cycles):
+    if len(cycles) == 0:
+        return 'None'
+    cycles = [' '.join(map(str, cycle)) for cycle in cycles]
+    return '; '.join(cycles)
+
 def run(i, k):
     """
     Run our greedy algorithm on the ith instance with k max cycle length.
@@ -21,14 +41,15 @@ def run(i, k):
     n = A.shape[0]
     solutions = []
     solutions.append(solve_greedy(np.copy(A), C, n, k, range(n)))
-    for i in range(5):
+    print(solutions[0][0])
+    for i in range(3):  # run the randomized version 3 times
         A_copy = np.copy(A)
         perm = list(range(n))
         shuffle(perm)
         sol = solve_greedy(A_copy, C, n, k, perm)
         solutions.append(sol)
-        print(sol)
-    return max(solutions[0])
+        print(sol[0])
+    return max(solutions)
 
 def solve_greedy(A, C, n, k, perm):
     """
@@ -43,7 +64,6 @@ def solve_greedy(A, C, n, k, perm):
     total_weight = 0
     cycles = []
     while True:
-        start = None
         best_weight = 0
         best_cycle = None
         for i in perm:
@@ -53,7 +73,6 @@ def solve_greedy(A, C, n, k, perm):
             if cycle is None:
                 continue
             if weight > best_weight:
-                start = i
                 best_weight = weight
                 best_cycle = cycle
         if best_cycle is None:
@@ -136,6 +155,19 @@ def check_cycles(A, C, k, cycles, objval):
     if r_objval != objval:
         print('ERROR: reported objective value != real objective value : r_objval =', r_objval, ', objval =', objval)
 
+def run_inst(i):
+        solution = run(i, 5)
+        objval, cycles = solution
+        objval = float(objval)
+        print(solution)
+        output(i, cycles, objval, 0.0)
+
 if __name__ == '__main__':
-    if len(argv) > 1 and int(argv[1]) in range(1, 493):
-        print(run(int(argv[1]), 5))
+    if len(argv) == 2 and int(argv[1]) in range(1, 493):
+        i = int(argv[1])
+        run_inst(i)
+    elif len(argv) == 3 and int(argv[1]) < int(argv[2]):
+        l = int(argv[1])
+        r = int(argv[2])
+        for i in range(l, r):
+            run_inst(i)
