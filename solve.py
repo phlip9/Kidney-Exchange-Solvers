@@ -22,7 +22,7 @@ def solve_two_cycle(l, r):
 
 def solve_three_cycle(l, r):
     for i in range(l, r):
-        print('k <= 3 cycle solver %d in [%d, %d)' & (i, l, r))
+        print('k <= 3 cycle solver %d in [%d, %d)' % (i, l, r))
         filename = 'phase1-processed/%d.in' % i
         A, C = read(filename)
         subproblems = preprocess(A, C, 5)
