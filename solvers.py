@@ -99,7 +99,8 @@ def solve(A, C, k, gap):
     return cycles, objval
 
 def solve_subproblem(A, C, inv_map, k, gap):
-    cycles, objval = constantino(A, C, k, gap)
+    cycles, objval = cycle_milp(A, C, k, gap)
+    # cycles, objval = constantino(A, C, k, gap)
     # cycles, objval = two_cycle(A, C, gap)
     # cycles, objval = lazy_cycle_constraint(A, C, k, gap)
     print('cycles_i (pre_inv) =', cycles)
@@ -373,6 +374,89 @@ def constantino(A, C, k, gap):
 
     return cycles, m.objval
 
+def dfs_cycles(i, A, k):
+    n = A.shape[0]
+    queue = [(j, [j]) for j in range(i+1, n) if A[i, j] == 1]
+    while len(queue) > 0:
+        pos, path = queue.pop()
+        for j in range(i, n):
+            if A[pos, j] == 1:
+                new_path = list(path)
+                if j == i:
+                    new_path.append(j)
+                    yield new_path
+                else:
+                    new_path = list(path)
+                    if j not in path:
+                        new_path.append(j)
+                        if len(new_path) < k:
+                            queue.append((j, new_path))
+
+def cycle_milp(A, C, k, gap):
+    n = A.shape[0]
+    t_0 = time.clock()
+    _ = '*'
+    m = Model()
+    m.modelsense = GRB.MAXIMIZE
+    m.params.mipgap = gap
+
+    cycles = []
+    vars = []
+    cycles_grouped = [[] for i in range(n)]
+    vars_grouped = [[] for i in range(n)]
+
+    print('[%.1f] Generating variables...' % (time.clock() - t_0))
+
+    print('i = ', end='')
+    for i in range(n):
+        for cycle in dfs_cycles(i, A, k):
+            w = sum([2 if j in C else 1 for j in cycle])
+            var = m.addVar(vtype=GRB.BINARY, obj=w)
+            vars.append(var)
+            cycles.append(cycle)
+            cycles_grouped[i].append(cycle)
+            vars_grouped[i].append(var)
+            for j in cycle:
+                if j > i:
+                    vars_grouped[j].append(var)
+                    cycles_grouped[j].append(cycle)
+        if (i + 1) % 10 == 0:
+            print(' ', i + 1, ' ', end='')
+    print()
+
+    m.update()
+
+    print('[%.1f] Generated variables...' % (time.clock() - t_0))
+    print('[%.1f] Generating constraints...' % (time.clock() - t_0))
+
+    for i in range(n):
+        vars_i = vars_grouped[i]
+        lhs = LinExpr()
+        ones = [1.0]*len(vars_i)
+        lhs.addTerms(ones, vars_i)
+        m.addConstr(lhs <= 1.0)
+
+    print('[%.1f] Generated constraints...' % (time.clock() - t_0))
+    print('[%.1f] Begin Optimizing %d vertex %d cycle model' % (time.clock() - t_0, n, len(cycles)))
+
+    m.update()
+    m.optimize()
+    m.update()
+
+    print('[%.1f] Finished Optimizing' % (time.clock() - t_0))
+    print('[%.1f] Building cycles...' % (time.clock() - t_0))
+
+    final_cycles = []
+
+    for i in range(len(vars)):
+        var = vars[i]
+        if var.x == 1.0:
+            cycle = cycles[i]
+            final_cycles.append(cycle)
+
+    print('[%.1f] Finished building cycles' % (time.clock() - t_0))
+    return final_cycles, m.objval
+
 def check_cycles(A, C, k, cycles, objval):
     n = A.shape[0]
     used = [False for i in range(n)]
@@ -407,4 +491,5 @@ if __name__ == '__main__':
         gap = 1e-4
         if len(argv) > 2:
             gap = float(argv[2])
-        solve_instance(int(argv[1]), 5, gap)
+        # solve_instance(int(argv[1]), 5, gap)
+        solve_instance(int(argv[1]), 3, gap)
