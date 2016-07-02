@@ -1,23 +1,27 @@
-from solvers import read_instance, check_cycles
+from solvers import read_instance, check_cycles, preprocess
 import numpy as np
 from statistics import mean, median, stdev
 
 N = 492
+k = 5
 
 def print_instance_stats():
-    instances = (read_instance(i)[0] for i in range(1, N + 1))
+    instances = (read_instance(i) for i in range(1, N + 1))
     ns = []
     ds = []
     for i in range(N):
-        A = next(instances)
-        n = A.shape[0]
-        ns.append(n)
-        d = 0.0
-        if n > 2:
-            d = np.sum(A)/float(n*n - n)
-        d = float(d)
-        ds.append(d)
-        print('[%d] : n = %d; d = %0.2f' % (i+1, n, d))
+        A, C = next(instances)
+        subproblems = preprocess(A, C, k)
+        for j, subproblem in enumerate(subproblems):
+            A_j, _, _ = subproblem
+            n = A_j.shape[0]
+            ns.append(n)
+            d = 0.0
+            if n > 2:
+                d = np.sum(A_j)/float(n*n - n)
+            d = float(d)
+            ds.append(d)
+            print('[%d.%d] : n = %d; d = %0.2f' % (i+1, j+1, n, d))
 
     print('n avg: %d, med: %0.2f, stdev: %0.2f' % (mean(ns), median(ns), stdev(ns)))
     print('d avg: %0.2f, stdev: %0.2f' % (mean(ds), stdev(ds)))
@@ -63,4 +67,7 @@ def gen_output():
             cycles = f.readline().strip()
             print(cycles)
 
-gen_output()
+print_instance_stats()
+
+# check_all()
+# gen_output()

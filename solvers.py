@@ -5,6 +5,7 @@ import time
 from sys import argv
 from os import path
 from itertools import chain
+from random import randint, shuffle
 
 def read(filename):
     with open(filename, 'r') as f:
@@ -375,22 +376,30 @@ def constantino(A, C, k, gap):
     return cycles, m.objval
 
 def dfs_cycles(i, A, k):
+    n_cycles = 0
+    max_cycles = 100
     n = A.shape[0]
     queue = [(j, [j]) for j in range(i+1, n) if A[i, j] == 1]
-    while len(queue) > 0:
-        pos, path = queue.pop()
-        for j in range(i, n):
-            if A[pos, j] == 1:
+    while len(queue) > 0 and n_cycles < max_cycles:
+        queue_len = len(queue)
+        rand_idx = randint(0, queue_len-1)
+        pos, path = queue.pop(rand_idx)
+        edges = [j for j in range(i, n) if A[pos, j] == 1]
+        shuffle(edges)
+        for j in edges:
+            new_path = list(path)
+            if j == i:
+                new_path.append(j)
+                n_cycles += 1
+                yield new_path
+                if n_cycles >= max_cycles:
+                    break
+            else:
                 new_path = list(path)
-                if j == i:
+                if j not in path:
                     new_path.append(j)
-                    yield new_path
-                else:
-                    new_path = list(path)
-                    if j not in path:
-                        new_path.append(j)
-                        if len(new_path) < k:
-                            queue.append((j, new_path))
+                    if len(new_path) < k:
+                        queue.append((j, new_path))
 
 def cycle_milp(A, C, k, gap):
     n = A.shape[0]
@@ -421,8 +430,7 @@ def cycle_milp(A, C, k, gap):
                     vars_grouped[j].append(var)
                     cycles_grouped[j].append(cycle)
         if (i + 1) % 10 == 0:
-            print(' ', i + 1, ' ', end='')
-    print()
+            print(i + 1)
 
     m.update()
 
@@ -491,5 +499,5 @@ if __name__ == '__main__':
         gap = 1e-4
         if len(argv) > 2:
             gap = float(argv[2])
-        # solve_instance(int(argv[1]), 5, gap)
-        solve_instance(int(argv[1]), 3, gap)
+        solve_instance(int(argv[1]), 5, gap)
+        # solve_instance(int(argv[1]), 3, gap)

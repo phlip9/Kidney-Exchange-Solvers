@@ -1,0 +1,102 @@
+\documentclass[paper=a4, fontsize=11pt]{scrartcl}
+\usepackage[protrusion=true,expansion=true]{microtype}	
+\usepackage{url}
+
+%%% Custom sectioning
+\usepackage{sectsty}
+\allsectionsfont{\centering \normalfont\scshape}
+
+
+%%% Custom headers/footers (fancyhdr package)
+\usepackage{fancyhdr}
+\pagestyle{fancyplain}
+\fancyhead{}											% No page header
+\fancyfoot[L]{}											% Empty 
+\fancyfoot[C]{}											% Empty
+\fancyfoot[R]{\thepage}									% Pagenumbering
+\renewcommand{\headrulewidth}{0pt}			% Remove header underlines
+\renewcommand{\footrulewidth}{0pt}				% Remove footer underlines
+\setlength{\headheight}{13.6pt}
+
+
+%%% Maketitle metadata
+\newcommand{\horrule}[1]{\rule{\linewidth}{#1}} 	% Horizontal rule
+
+\title{
+        %\vspace{-1in} 	
+        \usefont{OT1}{bch}{b}{n}
+        \normalfont \normalsize \textsc{University of California, Berkeley} \\ [5pt]
+        \horrule{0.5pt} \\[0.4cm]
+        \huge Finding optimal kidney exchange cycles \\
+        \horrule{2pt} \\[0.5cm]
+}
+\author{
+        \normalfont 								\normalsize
+        Philip Hayes, Tommy Anthony, Arani Bhatta\\[-3pt]		\normalsize
+        SIDs: 25394273, 25280364, 25280364 \\[-3pt]\normalsize
+        \today
+}
+\date{}
+
+
+%%% Begin document
+\begin{document}
+\maketitle
+
+We created 4 different algorithms, each of which covered different areas of the problem
+space. The primary motivation for the ensemble of algorithms was the wide range of
+graph densities in our instance set; thus, our objective for each algorithm was to target a
+specific subset of the problem space. We also took advantage of the highly optimized
+mixed linear integer programming (MILP) library, Gurobi \cite{Gurobi15}.
+
+\paragraph{}
+
+The first step in solving an instance was splitting the graph into its strongly connected
+components, each of which could be solved independently. For instances with densities
+below 25\%, we designed a MILP which copied the graph $|V|$ times and made the restriction
+that the $l^{th}$ copy of the graph contained only a single cycle beginning and ending at
+the $l^{th}$ vertex. We then enforced flow and cycle length constraints across every graph
+copy. This solved most medium-low density graphs to optimality. This algorithm was inspired
+by the polynomial-sized Extended Edge model presented in Constantino et al. (2013)
+\cite{Constantino13}.
+
+\paragraph{}
+
+For graphs of less than 40\% density, we found that the optimal $k\le 3$-cycle allocation
+achieved optimality in much less time than the previously described algorithm. Here, we exhaustively
+enumerated every possible $k\le 3$-cycle, formulated it as a MILP optimization, and enforced vertex
+constraints.
+
+\paragraph{}
+
+For the highly dense graphs of greater than 40\% density, we created two different algorithms.
+The first was a $k=2$-cycle MILP which reinterpreted the directed graph as a purely undirected
+graph and then optimized over the set of undirected edges (2-cycles). The second was a randomized,
+greedy cycle finder inspired by the description presented in Abbassi et al. (2008) \cite{Abbassi08}
+that achieved better scores than the $k=2$-cycle cover on select instances.
+
+\newpage
+
+\begin{thebibliography}{9}
+
+\bibitem{Gurobi15}
+    Gurobi Optimization, Inc.
+    "Gurobi Optimizer",
+    \url{http://www.gurobi.com},
+    2015.
+
+\bibitem{Constantino13}
+    Constantino, Miguel, et al.
+    "New insights on integer-programming models for the kidney exchange problem."
+    \emph{European Journal of Operational Research}
+    231.1 (2013): 57-68.
+
+\bibitem{Abbassi08}
+    Abbassi, Zeinab, and Laks V. S. Lakshmanan.
+    "Offline Matching Approximation Algorithms in Exchange Markets."
+    \emph{Proceeding of the 17th International Conference on World Wide Web - WWW'08}
+    (2008): Web.
+
+\end{thebibliography}
+
+\end{document}
